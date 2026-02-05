@@ -11,7 +11,14 @@ import {
   BookOpen, 
   Users, 
   Coffee, 
-  Star 
+  Star,
+  Music,
+  Camera,
+  Gamepad2,
+  Heart,
+  Image as ImageIcon,
+  Upload,
+  X
 } from 'lucide-react';
 import { Hobby, FrequencyType } from '../types';
 import { suggestNewHobbies } from '../services/geminiService';
@@ -22,6 +29,19 @@ interface DashboardProps {
   onAddHobby: (hobby: Omit<Hobby, 'id' | 'logs' | 'createdAt'>) => void;
   onDeleteHobby: (id: string) => void;
 }
+
+const ICON_OPTIONS = [
+  { id: 'palette', icon: Palette, color: 'text-violet-500' },
+  { id: 'dumbbell', icon: Dumbbell, color: 'text-emerald-500' },
+  { id: 'book', icon: BookOpen, color: 'text-blue-500' },
+  { id: 'users', icon: Users, color: 'text-amber-500' },
+  { id: 'coffee', icon: Coffee, color: 'text-rose-500' },
+  { id: 'music', icon: Music, color: 'text-pink-500' },
+  { id: 'camera', icon: Camera, color: 'text-cyan-500' },
+  { id: 'game', icon: Gamepad2, color: 'text-purple-500' },
+  { id: 'heart', icon: Heart, color: 'text-red-500' },
+  { id: 'star', icon: Star, color: 'text-slate-400' },
+];
 
 export const Dashboard: React.FC<DashboardProps> = ({ hobbies, onSelectHobby, onAddHobby, onDeleteHobby }) => {
   const [isAdding, setIsAdding] = useState(false);
@@ -36,9 +56,49 @@ export const Dashboard: React.FC<DashboardProps> = ({ hobbies, onSelectHobby, on
   const [desc, setDesc] = useState('');
   const [target, setTarget] = useState(3);
   const [freq, setFreq] = useState<FrequencyType>(FrequencyType.Weekly);
+  
+  // Icon Selection State
+  const [selectedIcon, setSelectedIcon] = useState<string>('palette');
+  const [customIcon, setCustomIcon] = useState<string | null>(null);
 
   const totalLogs = hobbies.reduce((acc, h) => acc + h.logs.length, 0);
   const totalHours = hobbies.reduce((acc, h) => acc + h.logs.reduce((sum, l) => sum + l.durationMinutes, 0), 0) / 60;
+
+  const getCategoryDefaultIcon = (cat: string) => {
+    switch (cat) {
+      case 'Creative': return 'palette';
+      case 'Physical': return 'dumbbell';
+      case 'Educational': return 'book';
+      case 'Social': return 'users';
+      case 'Relaxation': return 'coffee';
+      default: return 'star';
+    }
+  };
+
+  const handleCategoryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const newCat = e.target.value;
+    setCategory(newCat);
+    if (!customIcon) {
+      setSelectedIcon(getCategoryDefaultIcon(newCat));
+    }
+  };
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setCustomIcon(reader.result as string);
+        setSelectedIcon(''); // Clear preset selection visually
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const selectPreset = (id: string) => {
+    setSelectedIcon(id);
+    setCustomIcon(null); // Clear custom icon
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -46,7 +106,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ hobbies, onSelectHobby, on
       name,
       description: desc,
       category,
-      icon: '🎨',
+      icon: customIcon || selectedIcon,
       targetFrequency: target,
       frequencyType: freq
     });
@@ -59,6 +119,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ hobbies, onSelectHobby, on
     setDesc('');
     setCategory('Creative');
     setTarget(3);
+    setCustomIcon(null);
+    setSelectedIcon('palette');
   };
 
   const handleGetSuggestions = async () => {
@@ -91,15 +153,24 @@ export const Dashboard: React.FC<DashboardProps> = ({ hobbies, onSelectHobby, on
     return { count, percent, label };
   };
 
-  const getCategoryIcon = (category: string) => {
-    switch (category) {
-      case 'Creative': return <Palette size={20} className="text-violet-500" />;
-      case 'Physical': return <Dumbbell size={20} className="text-emerald-500" />;
-      case 'Educational': return <BookOpen size={20} className="text-blue-500" />;
-      case 'Social': return <Users size={20} className="text-amber-500" />;
-      case 'Relaxation': return <Coffee size={20} className="text-rose-500" />;
-      default: return <Star size={20} className="text-slate-400" />;
+  const getHobbyIcon = (hobby: Hobby) => {
+    // 1. Custom Uploaded Image
+    if (hobby.icon && hobby.icon.startsWith('data:image')) {
+      return <img src={hobby.icon} alt={hobby.name} className="w-5 h-5 rounded-full object-cover shadow-sm border border-slate-200" />;
     }
+
+    // 2. Selected Preset
+    const preset = ICON_OPTIONS.find(opt => opt.id === hobby.icon);
+    if (preset) {
+      const IconComponent = preset.icon;
+      return <IconComponent size={20} className={preset.color} />;
+    }
+
+    // 3. Fallback to Category Default (for old data or missing icons)
+    const defaultId = getCategoryDefaultIcon(hobby.category);
+    const defaultPreset = ICON_OPTIONS.find(opt => opt.id === defaultId) || ICON_OPTIONS.find(opt => opt.id === 'star')!;
+    const DefaultIcon = defaultPreset.icon;
+    return <DefaultIcon size={20} className={defaultPreset.color} />;
   };
 
   return (
@@ -199,7 +270,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ hobbies, onSelectHobby, on
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Category</label>
-                <select className="w-full p-2 border border-slate-200 rounded-lg outline-none" value={category} onChange={e => setCategory(e.target.value)}>
+                <select className="w-full p-2 border border-slate-200 rounded-lg outline-none" value={category} onChange={handleCategoryChange}>
                   <option>Creative</option>
                   <option>Physical</option>
                   <option>Educational</option>
@@ -212,6 +283,66 @@ export const Dashboard: React.FC<DashboardProps> = ({ hobbies, onSelectHobby, on
               <label className="block text-sm font-medium text-slate-700 mb-1">Description</label>
               <input type="text" className="w-full p-2 border border-slate-200 rounded-lg outline-none" value={desc} onChange={e => setDesc(e.target.value)} />
             </div>
+
+            {/* Icon Selection */}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">Icon</label>
+              <div className="flex flex-wrap gap-2 items-center">
+                {ICON_OPTIONS.map((opt) => {
+                   const IconComp = opt.icon;
+                   const isSelected = !customIcon && selectedIcon === opt.id;
+                   return (
+                     <button
+                       key={opt.id}
+                       type="button"
+                       onClick={() => selectPreset(opt.id)}
+                       className={`p-2 rounded-lg border transition-all ${isSelected ? 'bg-violet-50 border-violet-500 ring-1 ring-violet-500' : 'bg-white border-slate-200 hover:border-slate-300'}`}
+                     >
+                       <IconComp size={20} className={opt.color} />
+                     </button>
+                   );
+                })}
+
+                <div className="relative">
+                   <input 
+                     type="file" 
+                     accept="image/*" 
+                     className="hidden" 
+                     id="icon-upload"
+                     onChange={handleImageUpload}
+                   />
+                   {customIcon ? (
+                    <div className="relative group">
+                       <img 
+                         src={customIcon} 
+                         alt="Custom" 
+                         className="w-10 h-10 rounded-lg object-cover border-2 border-violet-500 ring-1 ring-violet-500 cursor-pointer" 
+                       />
+                       <button 
+                         type="button" 
+                         onClick={(e) => {
+                           e.stopPropagation();
+                           setCustomIcon(null);
+                           setSelectedIcon(getCategoryDefaultIcon(category)); // Fallback
+                         }} 
+                         className="absolute -top-2 -right-2 bg-slate-800 text-white rounded-full p-0.5 hover:bg-red-500 transition-colors shadow-sm"
+                       >
+                         <X size={12} />
+                       </button>
+                    </div>
+                   ) : (
+                     <label 
+                       htmlFor="icon-upload" 
+                       className="flex items-center justify-center w-10 h-10 rounded-lg border border-dashed border-slate-300 hover:border-violet-500 hover:text-violet-500 text-slate-400 cursor-pointer transition-colors bg-slate-50"
+                       title="Upload custom icon"
+                     >
+                       <Upload size={18} />
+                     </label>
+                   )}
+                </div>
+              </div>
+            </div>
+
             <div className="flex gap-4 items-center">
               <label className="text-sm font-medium text-slate-700">Target:</label>
               <input type="number" min="1" className="w-20 p-2 border border-slate-200 rounded-lg" value={target} onChange={e => setTarget(parseInt(e.target.value))} />
@@ -244,7 +375,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ hobbies, onSelectHobby, on
                 </span>
                 <div className="flex items-center gap-2">
                   <div className="mt-0.5">
-                    {getCategoryIcon(hobby.category)}
+                    {getHobbyIcon(hobby)}
                   </div>
                   <h3 className="text-xl font-bold text-slate-800 leading-tight">{hobby.name}</h3>
                 </div>
@@ -276,17 +407,37 @@ export const Dashboard: React.FC<DashboardProps> = ({ hobbies, onSelectHobby, on
             {/* Real Progress Bar */}
             {(() => {
               const { count, percent, label } = getProgress(hobby);
+              
+              let statusText = 'Falling Behind';
+              let statusColor = 'text-rose-700 bg-rose-100 border-rose-200';
+              let barColor = 'bg-rose-500';
+
+              if (percent >= 100) {
+                statusText = 'Goal Met';
+                statusColor = 'text-emerald-700 bg-emerald-100 border-emerald-200';
+                barColor = 'bg-emerald-500';
+              } else if (percent >= 50) {
+                statusText = 'On Track';
+                statusColor = 'text-violet-700 bg-violet-100 border-violet-200';
+                barColor = 'bg-violet-500';
+              }
+
               return (
                 <div className="mt-2 pt-4 border-t border-slate-50">
                    <div className="flex justify-between items-center text-xs mb-2">
-                     <span className="font-medium text-slate-500">Goal <span className="text-slate-400 font-normal">({label})</span></span>
+                     <div className="flex items-center gap-2">
+                       <span className="font-medium text-slate-500">Goal <span className="text-slate-400 font-normal">({label})</span></span>
+                       <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide border ${statusColor}`}>
+                         {statusText}
+                       </span>
+                     </div>
                      <span className={`font-bold ${percent >= 100 ? 'text-emerald-600' : 'text-slate-700'}`}>
                        {count}/{hobby.targetFrequency}
                      </span>
                    </div>
                    <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
                      <div 
-                       className={`h-full rounded-full transition-all duration-500 ${percent >= 100 ? 'bg-emerald-500' : 'bg-violet-500'}`}
+                       className={`h-full rounded-full transition-all duration-500 ${barColor}`}
                        style={{ width: `${percent}%` }}
                      />
                    </div>
